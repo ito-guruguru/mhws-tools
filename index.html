@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>巨戟厳選テーブル メモ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a1c22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="巨戟テーブル">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root {
+    --bg: #1a1c22;
+    --panel: #23262e;
+    --border: #3a3e4a;
+    --text: #e8e9ed;
+    --sub: #9aa0ae;
+    --accent: #c8a24a;
+    --maru: #4cc9f0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    margin: 4px 0 12px;
+  }
+  h1 {
+    font-size: 17px;
+    margin: 0;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  button {
+    font-size: 13px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:active { background: var(--border); }
+  button.danger {
+    color: #ef6464;
+    margin-left: auto;
+    padding: 8px 14px;
+  }
+
+  .table-wrap {
+    overflow: auto;
+    max-height: calc(100vh - 80px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  th, td {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    font-size: 14px;
+    background: var(--panel);
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #2b2f3a;
+    color: var(--sub);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 6px 4px;
+    min-width: 64px;
+    white-space: nowrap;
+  }
+  thead th:first-child {
+    left: 0;
+    z-index: 3;
+    min-width: 56px;
+  }
+  tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: #2b2f3a;
+    color: var(--sub);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+  td.cell {
+    min-width: 64px;
+    height: 44px;
+    cursor: pointer;
+    font-size: 18px;
+    user-select: none;
+  }
+  td.cell.maru { color: var(--maru); background: rgba(76, 201, 240, 0.22); font-weight: bold; }
+
+  /* 列ヘッダーの武器種＋属性チップ */
+  .colhead {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 4px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .chip:active { background: var(--border); }
+  .chip .wicon {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    background: #f2f2f2;
+    object-fit: contain;
+    padding: 1px;
+  }
+  .chip .placeholder {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sub);
+    font-size: 16px;
+  }
+  .chip .elem {
+    font-size: 15px;
+    font-weight: bold;
+    min-width: 14px;
+  }
+  .chip .elem.empty { color: var(--sub); font-weight: normal; }
+  .e-fire    { color: #ff7b5c; }
+  .e-water   { color: #5cb8ff; }
+  .e-thunder { color: #ffd95c; }
+  .e-ice     { color: #8ce8ff; }
+  .e-dragon  { color: #b88cff; }
+  .e-poison  { color: #c861f0; }
+  .e-para    { color: #ffe14d; }
+  .e-sleep   { color: #5fd0e8; }
+  .e-blast   { color: #ff9c40; }
+
+  button.coldel {
+    padding: 2px 5px;
+    font-size: 11px;
+    color: var(--sub);
+    border: none;
+    background: transparent;
+  }
+
+  th.addcol, th.addrow { padding: 0; }
+  button.add {
+    width: 100%;
+    height: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: bold;
+  }
+  td.filler { background: transparent; border-right: none; }
+
+  /* ピッカー */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .picker {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    overflow: auto;
+    padding: 16px;
+  }
+  .picker h2 {
+    font-size: 14px;
+    margin: 0 0 4px;
+    color: var(--accent);
+  }
+  .picker .section-label {
+    font-size: 12px;
+    color: var(--sub);
+    margin: 14px 0 6px;
+  }
+  .weapon-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .weapon-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    background: #1f2229;
+  }
+  .weapon-opt.sel { border-color: var(--accent); background: #2e3038; }
+  .weapon-opt img {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    background: #f2f2f2;
+    object-fit: contain;
+    padding: 2px;
+  }
+  .weapon-opt span { font-size: 10px; color: var(--sub); line-height: 1.1; text-align: center; }
+  .elem-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .elem-opt {
+    flex: 1;
+    min-width: 48px;
+    padding: 10px 4px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background: #1f2229;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+  }
+  .elem-opt.sel { border-color: var(--accent); background: #2e3038; }
+  .elem-opt.none { color: var(--sub); font-weight: normal; }
+  .picker-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+  .picker-actions button { padding: 9px 18px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>巨戟厳選テーブル メモ</h1>
+  <button id="resetBtn" class="danger">リセット</button>
+</div>
+
+<div class="table-wrap">
+  <table id="tbl"></table>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="picker">
+    <h2>武器種・属性を選択</h2>
+    <div class="section-label">武器種</div>
+    <div class="weapon-grid" id="weaponGrid"></div>
+    <div class="section-label">属性</div>
+    <div class="elem-row" id="elemRow"></div>
+    <div class="picker-actions">
+      <button id="pickerClose">完了</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const WEAPONS = [
+  { code: 'gs',  name: '大剣' },
+  { code: 'ls',  name: '太刀' },
+  { code: 'sns', name: '片手剣' },
+  { code: 'db',  name: '双剣' },
+  { code: 'hm',  name: 'ハンマー' },
+  { code: 'hh',  name: '狩猟笛' },
+  { code: 'lnc', name: 'ランス' },
+  { code: 'gl',  name: 'ガンランス' },
+  { code: 'sa',  name: 'スラッシュアックス' },
+  { code: 'cb',  name: 'チャージアックス' },
+  { code: 'ig',  name: '操虫棍' },
+  { code: 'lbg', name: 'ライトボウガン' },
+  { code: 'hbg', name: 'ヘビィボウガン' },
+  { code: 'bow', name: '弓' },
+];
+const WEAPON_NAME = Object.fromEntries(WEAPONS.map(w => [w.code, w.name]));
+const ELEMENTS = [
+  { val: '火',   short: '火',   cls: 'e-fire' },
+  { val: '水',   short: '水',   cls: 'e-water' },
+  { val: '雷',   short: '雷',   cls: 'e-thunder' },
+  { val: '氷',   short: '氷',   cls: 'e-ice' },
+  { val: '龍',   short: '龍',   cls: 'e-dragon' },
+  { val: '毒',   short: '毒',   cls: 'e-poison' },
+  { val: '麻痺', short: '麻',   cls: 'e-para' },
+  { val: '睡眠', short: '睡',   cls: 'e-sleep' },
+  { val: '爆破', short: '爆',   cls: 'e-blast' },
+];
+const ELEM_BY_VAL = Object.fromEntries(ELEMENTS.map(e => [e.val, e]));
+function elemShort(v) { const e = ELEM_BY_VAL[v]; return e ? e.short : v; }
+function elemClass(v) { const e = ELEM_BY_VAL[v]; return e ? e.cls : ''; }
+const STATES = ['', '◯'];
+const STORAGE_KEY = 'kyogeki-table-v3';
+
+let state = loadState() || migrateOldState() || defaultState();
+let editingCol = null;
+
+function iconPath(code) { return 'images/icn_' + code + '.png'; }
+
+function defaultState() {
+  return {
+    counts: 20,
+    cols: ELEMENTS.slice(0, 5).map(e => ({ weapon: 'gs', element: e.val, cells: Array(20).fill('') }))
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.cols || !s.counts) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
+// 旧版（属性のみ・×あり）のデータがあれば武器=大剣で引き継ぎ、×は空白へ
+function migrateOldState() {
+  for (const key of ['artian-table-v2', 'artian-table-v1']) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const old = JSON.parse(raw);
+      let cols, counts;
+      if (old.cols && old.counts) { cols = old.cols; counts = old.counts; }       // v2: cols=属性
+      else if (old.rows && old.cols) { cols = old.rows; counts = old.cols; }       // v1: rows=属性
+      else continue;
+      const s = {
+        counts,
+        cols: cols.map(c => ({
+          weapon: 'gs',
+          element: c.element || '',
+          cells: (c.cells || []).map(v => v === '◯' ? '◯' : '')
+        }))
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      return s;
+    } catch (e) { /* try next */ }
+  }
+  return null;
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function render() {
+  const tbl = document.getElementById('tbl');
+  tbl.innerHTML = '';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const corner = document.createElement('th');
+  corner.textContent = '回数';
+  headRow.appendChild(corner);
+
+  state.cols.forEach((col, ci) => {
+    const th = document.createElement('th');
+    const wrap = document.createElement('div');
+    wrap.className = 'colhead';
+
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.title = (WEAPON_NAME[col.weapon] || '武器') + (col.element || '');
+
+    if (col.weapon) {
+      const img = document.createElement('img');
+      img.className = 'wicon';
+      img.src = iconPath(col.weapon);
+      img.alt = WEAPON_NAME[col.weapon] || '';
+      chip.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'placeholder';
+      ph.textContent = '?';
+      chip.appendChild(ph);
+    }
+
+    const el = document.createElement('span');
+    el.className = 'elem ' + (col.element ? elemClass(col.element) : 'empty');
+    el.textContent = col.element ? elemShort(col.element) : '－';
+    chip.appendChild(el);
+
+    chip.addEventListener('click', () => openPicker(ci));
+    wrap.appendChild(chip);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'coldel';
+    delBtn.textContent = '✕';
+    delBtn.title = 'この列を削除';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('この列を削除しますか？')) {
+        state.cols.splice(ci, 1);
+        saveState();
+        render();
+      }
+    });
+    wrap.appendChild(delBtn);
+
+    th.appendChild(wrap);
+    headRow.appendChild(th);
+  });
+
+  // 列追加
+  const addColTh = document.createElement('th');
+  addColTh.className = 'addcol';
+  const addColBtn = document.createElement('button');
+  addColBtn.className = 'add';
+  addColBtn.textContent = '＋';
+  addColBtn.title = '列を追加';
+  addColBtn.addEventListener('click', () => {
+    state.cols.push({ weapon: 'gs', element: '', cells: Array(state.counts).fill('') });
+    saveState();
+    render();
+  });
+  addColTh.appendChild(addColBtn);
+  headRow.appendChild(addColTh);
+
+  thead.appendChild(headRow);
+  tbl.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (let r = 0; r < state.counts; r++) {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.textContent = (r + 1) + '回目';
+    tr.appendChild(th);
+
+    state.cols.forEach(col => {
+      const val = col.cells[r] || '';
+      const td = document.createElement('td');
+      td.className = 'cell' + (val === '◯' ? ' maru' : '');
+      td.textContent = val;
+      td.addEventListener('click', () => {
+        const next = STATES[(STATES.indexOf(col.cells[r] || '') + 1) % STATES.length];
+        col.cells[r] = next;
+        td.textContent = next;
+        td.className = 'cell' + (next === '◯' ? ' maru' : '');
+        saveState();
+      });
+      tr.appendChild(td);
+    });
+
+    tr.appendChild(document.createElement('td')).className = 'filler';
+    tbody.appendChild(tr);
+  }
+
+  // 行追加
+  const addTr = document.createElement('tr');
+  const addRowTh = document.createElement('th');
+  addRowTh.className = 'addrow';
+  const addRowBtn = document.createElement('button');
+  addRowBtn.className = 'add';
+  addRowBtn.textContent = '＋';
+  addRowBtn.title = '行を追加';
+  addRowBtn.addEventListener('click', () => {
+    state.counts += 1;
+    state.cols.forEach(col => col.cells.push(''));
+    saveState();
+    render();
+    const w = document.querySelector('.table-wrap');
+    w.scrollTop = w.scrollHeight;
+  });
+  addRowTh.appendChild(addRowBtn);
+  const fillTd = document.createElement('td');
+  fillTd.className = 'filler';
+  fillTd.colSpan = state.cols.length + 1;
+  addTr.appendChild(addRowTh);
+  addTr.appendChild(fillTd);
+  tbody.appendChild(addTr);
+
+  tbl.appendChild(tbody);
+}
+
+/* ===== ピッカー ===== */
+function openPicker(ci) {
+  editingCol = ci;
+  renderPicker();
+  document.getElementById('overlay').classList.add('show');
+}
+function closePicker() {
+  document.getElementById('overlay').classList.remove('show');
+  editingCol = null;
+}
+function renderPicker() {
+  const col = state.cols[editingCol];
+
+  const grid = document.getElementById('weaponGrid');
+  grid.innerHTML = '';
+  WEAPONS.forEach(w => {
+    const opt = document.createElement('div');
+    opt.className = 'weapon-opt' + (col.weapon === w.code ? ' sel' : '');
+    const img = document.createElement('img');
+    img.src = iconPath(w.code);
+    img.alt = w.name;
+    const span = document.createElement('span');
+    span.textContent = w.name;
+    opt.appendChild(img);
+    opt.appendChild(span);
+    opt.addEventListener('click', () => {
+      col.weapon = w.code;
+      saveState();
+      renderPicker();
+      render();
+    });
+    grid.appendChild(opt);
+  });
+
+  const row = document.getElementById('elemRow');
+  row.innerHTML = '';
+  ELEMENTS.forEach(e => {
+    const opt = document.createElement('div');
+    opt.className = 'elem-opt ' + e.cls + (col.element === e.val ? ' sel' : '');
+    opt.textContent = e.val;
+    opt.addEventListener('click', () => {
+      col.element = e.val;
+      saveState();
+      renderPicker();
+      render();
+    });
+    row.appendChild(opt);
+  });
+  const none = document.createElement('div');
+  none.className = 'elem-opt none' + (!col.element ? ' sel' : '');
+  none.textContent = 'なし';
+  none.addEventListener('click', () => {
+    col.element = '';
+    saveState();
+    renderPicker();
+    render();
+  });
+  row.appendChild(none);
+}
+
+document.getElementById('pickerClose').addEventListener('click', closePicker);
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'overlay') closePicker();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm('すべてのデータをリセットしますか？')) {
+    state = defaultState();
+    saveState();
+    render();
+  }
+});
+
+render();
+</script>
+
+</body>
+</html>
