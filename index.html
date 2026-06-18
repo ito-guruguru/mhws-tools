@@ -80,6 +80,7 @@
   /* 一括追加ツールバー */
   .toolbar {
     display: flex;
+    align-items: center;
     gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 10px;
@@ -88,6 +89,22 @@
     padding: 8px 12px;
     font-size: 12px;
     color: var(--accent);
+  }
+  .zoom-ctrl {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--sub);
+  }
+  .zoom-ctrl select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 8px;
+    font-size: 12px;
   }
 
   .table-wrap {
@@ -417,6 +434,17 @@
   </ul>
   <div class="toolbar">
     <button id="bulkColBtn">＋ 5属性まとめて追加</button>
+    <div class="zoom-ctrl">
+      <span>表示</span>
+      <select id="zoomSelect">
+        <option value="25">25%</option>
+        <option value="50">50%</option>
+        <option value="75">75%</option>
+        <option value="100">100%</option>
+        <option value="150">150%</option>
+        <option value="200">200%</option>
+      </select>
+    </div>
   </div>
   <div class="table-wrap">
     <table id="tbl"></table>
@@ -471,6 +499,23 @@
     <div class="opt-row" id="boostRow"></div>
     <div class="picker-actions">
       <button id="pickerClose">完了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 列を追加 -->
+<div class="overlay" id="addColOverlay">
+  <div class="picker">
+    <h2>列を追加</h2>
+    <div class="section-label">武器種</div>
+    <div class="weapon-grid" id="addColWeaponGrid"></div>
+    <div class="section-label">属性</div>
+    <div class="opt-grid" id="addColElemRow"></div>
+    <div class="section-label">激化タイプ</div>
+    <div class="opt-row" id="addColBoostRow"></div>
+    <div class="picker-actions">
+      <button id="addColCancel">キャンセル</button>
+      <button id="addColConfirm" class="primary">追加</button>
     </div>
   </div>
 </div>
@@ -546,14 +591,16 @@ function iconPath(code) { return 'images/icn_' + code + '.png'; }
 
 function defaultState() {
   return {
-    counts: 30,
+    counts: 50,
     inputMode: 'simple',
-    cols: BASE_ELEMENTS.map(el => ({ weapon: 'gs', element: el, boost: '攻撃', cells: Array(30).fill('') }))
+    zoom: 1,
+    cols: [{ weapon: 'gs', element: '', boost: '攻撃', cells: Array(50).fill('') }]
   };
 }
 
 function normalize(s) {
   s.inputMode = s.inputMode === 'free' ? 'free' : 'simple';
+  s.zoom = (typeof s.zoom === 'number' && s.zoom >= 0.25 && s.zoom <= 2) ? s.zoom : 1;
   if (!Array.isArray(s.cols)) s.cols = [];
   s.cols.forEach(c => {
     if (c.weapon == null) c.weapon = '';
@@ -672,12 +719,8 @@ function render() {
   const addColBtn = document.createElement('button');
   addColBtn.className = 'add';
   addColBtn.textContent = '＋';
-  addColBtn.title = '列を1つ追加';
-  addColBtn.addEventListener('click', () => {
-    state.cols.push({ weapon: 'gs', element: '', boost: '攻撃', cells: Array(state.counts).fill('') });
-    saveState();
-    render();
-  });
+  addColBtn.title = '列を追加';
+  addColBtn.addEventListener('click', openAddCol);
   addColTh.appendChild(addColBtn);
   headRow.appendChild(addColTh);
 
@@ -746,11 +789,18 @@ function render() {
   bulkRowBtn.title = '行を10追加';
   bulkRowBtn.addEventListener('click', () => addRows(10));
   fillTd.appendChild(bulkRowBtn);
+  const bulkRowBtn50 = document.createElement('button');
+  bulkRowBtn50.className = 'add-inline';
+  bulkRowBtn50.textContent = '＋50回';
+  bulkRowBtn50.title = '行を50追加';
+  bulkRowBtn50.addEventListener('click', () => addRows(50));
+  fillTd.appendChild(bulkRowBtn50);
   addTr.appendChild(addRowTh);
   addTr.appendChild(fillTd);
   tbody.appendChild(addTr);
 
   tbl.appendChild(tbody);
+  tbl.style.zoom = state.zoom || 1;
 }
 
 function addRows(n) {
@@ -798,28 +848,30 @@ function buildBoostRow(container, selected, onPick) {
     container.appendChild(opt);
   });
 }
+function buildElemRow(container, selected, onPick) {
+  container.innerHTML = '';
+  ELEMENTS.forEach(e => {
+    const opt = document.createElement('div');
+    opt.className = 'opt ' + e.cls + (selected === e.val ? ' sel' : '');
+    opt.textContent = e.val;
+    opt.addEventListener('click', () => onPick(e.val));
+    container.appendChild(opt);
+  });
+  const none = document.createElement('div');
+  none.className = 'opt none' + (!selected ? ' sel' : '');
+  none.textContent = 'なし';
+  none.addEventListener('click', () => onPick(''));
+  container.appendChild(none);
+}
 function renderPicker() {
   const col = state.cols[editingCol];
 
   buildWeaponGrid(document.getElementById('weaponGrid'), col.weapon, code => {
     col.weapon = code; saveState(); renderPicker(); render();
   });
-
-  const row = document.getElementById('elemRow');
-  row.innerHTML = '';
-  ELEMENTS.forEach(e => {
-    const opt = document.createElement('div');
-    opt.className = 'opt ' + e.cls + (col.element === e.val ? ' sel' : '');
-    opt.textContent = e.val;
-    opt.addEventListener('click', () => { col.element = e.val; saveState(); renderPicker(); render(); });
-    row.appendChild(opt);
+  buildElemRow(document.getElementById('elemRow'), col.element, val => {
+    col.element = val; saveState(); renderPicker(); render();
   });
-  const none = document.createElement('div');
-  none.className = 'opt none' + (!col.element ? ' sel' : '');
-  none.textContent = 'なし';
-  none.addEventListener('click', () => { col.element = ''; saveState(); renderPicker(); render(); });
-  row.appendChild(none);
-
   buildBoostRow(document.getElementById('boostRow'), col.boost, val => {
     col.boost = val; saveState(); renderPicker(); render();
   });
@@ -848,6 +900,78 @@ document.getElementById('bulkConfirm').addEventListener('click', () => {
 document.getElementById('bulkCancel').addEventListener('click', closeBulk);
 document.getElementById('bulkColBtn').addEventListener('click', openBulk);
 
+/* ===== 列を追加（武器・属性・激化を選択） ===== */
+let addColWeapon = 'gs', addColElement = '', addColBoost = '攻撃';
+function openAddCol() {
+  addColWeapon = 'gs'; addColElement = ''; addColBoost = '攻撃';
+  renderAddCol();
+  document.getElementById('addColOverlay').classList.add('show');
+}
+function closeAddCol() { document.getElementById('addColOverlay').classList.remove('show'); }
+function renderAddCol() {
+  buildWeaponGrid(document.getElementById('addColWeaponGrid'), addColWeapon, c => { addColWeapon = c; renderAddCol(); });
+  buildElemRow(document.getElementById('addColElemRow'), addColElement, v => { addColElement = v; renderAddCol(); });
+  buildBoostRow(document.getElementById('addColBoostRow'), addColBoost, v => { addColBoost = v; renderAddCol(); });
+}
+document.getElementById('addColConfirm').addEventListener('click', () => {
+  state.cols.push({ weapon: addColWeapon, element: addColElement, boost: addColBoost, cells: Array(state.counts).fill('') });
+  saveState();
+  render();
+  closeAddCol();
+});
+document.getElementById('addColCancel').addEventListener('click', closeAddCol);
+document.getElementById('addColOverlay').addEventListener('click', (e) => { if (e.target.id === 'addColOverlay') closeAddCol(); });
+
+/* ===== 表示倍率（ズーム） ===== */
+const ZOOM_MIN = 0.25, ZOOM_MAX = 2;
+const ZOOM_PRESETS = ['25', '50', '75', '100', '150', '200'];
+function syncZoomSelect() {
+  const sel = document.getElementById('zoomSelect');
+  if (!sel) return;
+  const pct = Math.round(state.zoom * 100);
+  const custom = sel.querySelector('option[data-custom]');
+  if (custom) custom.remove();
+  if (!ZOOM_PRESETS.includes(String(pct))) {
+    const opt = document.createElement('option');
+    opt.value = String(pct);
+    opt.textContent = pct + '%';
+    opt.dataset.custom = '1';
+    sel.insertBefore(opt, sel.firstChild);
+  }
+  sel.value = String(pct);
+}
+function applyZoom() {
+  const tbl = document.getElementById('tbl');
+  if (tbl) tbl.style.zoom = state.zoom;
+  syncZoomSelect();
+}
+document.getElementById('zoomSelect').addEventListener('change', (e) => {
+  state.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, parseInt(e.target.value, 10) / 100));
+  saveState();
+  applyZoom();
+});
+(function setupPinch() {
+  const wrap = document.querySelector('.table-wrap');
+  let startDist = 0, startZoom = 1, pinching = false;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) { pinching = true; startDist = dist(e.touches); startZoom = state.zoom; }
+  }, { passive: false });
+  wrap.addEventListener('touchmove', (e) => {
+    if (pinching && e.touches.length === 2) {
+      e.preventDefault();
+      const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, startZoom * (dist(e.touches) / startDist)));
+      state.zoom = z;
+      const tbl = document.getElementById('tbl');
+      if (tbl) tbl.style.zoom = z;
+      syncZoomSelect();
+    }
+  }, { passive: false });
+  wrap.addEventListener('touchend', () => {
+    if (pinching) { pinching = false; state.zoom = Math.round(state.zoom * 100) / 100; saveState(); syncZoomSelect(); }
+  });
+})();
+
 document.getElementById('pickerClose').addEventListener('click', closePicker);
 document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closePicker(); });
 document.getElementById('bulkOverlay').addEventListener('click', (e) => { if (e.target.id === 'bulkOverlay') closeBulk(); });
@@ -855,10 +979,13 @@ document.getElementById('bulkOverlay').addEventListener('click', (e) => { if (e.
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (confirm('すべてのデータをリセットしますか？')) {
     const mode = state.inputMode;
+    const zoom = state.zoom;
     state = defaultState();
     state.inputMode = mode;
+    state.zoom = zoom;
     saveState();
     render();
+    applyZoom();
   }
 });
 
@@ -891,6 +1018,7 @@ setTab(localStorage.getItem(ACTIVE_TAB_KEY) || 'table');
 
 renderInputModeSeg();
 render();
+syncZoomSelect();
 </script>
 
 </body>
