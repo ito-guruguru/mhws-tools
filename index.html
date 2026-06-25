@@ -164,6 +164,8 @@
   }
   td.cell.maru { color: var(--maru); background: rgba(239, 85, 85, 0.20); font-weight: bold; }
   td.cell.tri  { color: var(--tri);  background: rgba(76, 207, 106, 0.20); font-weight: bold; }
+  td.cell.hl { box-shadow: inset 0 0 0 9999px rgba(200, 162, 74, 0.14); }
+  thead th.hl, tbody th.hl { background: #463c20; color: var(--accent); }
   td.cell.free { padding: 0; }
   .cell-input {
     width: 100%;
@@ -647,6 +649,34 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/* ===== 行列ハイライト（長押し） ===== */
+let highlight = { row: null, col: null };
+let lpFired = false; // 長押し発火後の click を抑制するフラグ
+
+function applyHighlight() {
+  const tbl = document.getElementById('tbl');
+  if (!tbl) return;
+  tbl.querySelectorAll('.hl').forEach(e => e.classList.remove('hl'));
+  if (highlight.row != null) tbl.querySelectorAll('[data-row="' + highlight.row + '"]').forEach(e => e.classList.add('hl'));
+  if (highlight.col != null) tbl.querySelectorAll('[data-col="' + highlight.col + '"]').forEach(e => e.classList.add('hl'));
+}
+function setHighlight(row, col) {
+  if (highlight.row === row && highlight.col === col) highlight = { row: null, col: null };
+  else highlight = { row: row, col: col };
+  applyHighlight();
+}
+function attachLongPress(el, onLong) {
+  let timer = null;
+  const start = () => { lpFired = false; timer = setTimeout(() => { lpFired = true; onLong(); }, 450); };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchmove', cancel);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', cancel);
+  el.addEventListener('mouseleave', cancel);
+}
+
 function render() {
   const tbl = document.getElementById('tbl');
   tbl.innerHTML = '';
@@ -659,6 +689,8 @@ function render() {
 
   state.cols.forEach((col, ci) => {
     const th = document.createElement('th');
+    th.dataset.col = ci;
+    attachLongPress(th, () => setHighlight(null, ci));
     const wrap = document.createElement('div');
     wrap.className = 'colhead';
 
@@ -686,7 +718,7 @@ function render() {
     el.className = 'elem ' + (col.element ? elemClass(col.element) : 'empty');
     el.textContent = col.element ? elemShort(col.element) : '－';
     chip.appendChild(el);
-    chip.addEventListener('click', () => openPicker(ci));
+    chip.addEventListener('click', () => { if (lpFired) { lpFired = false; return; } openPicker(ci); });
     chipRow.appendChild(chip);
 
     const delBtn = document.createElement('button');
@@ -695,6 +727,8 @@ function render() {
     delBtn.title = 'この列を削除';
     delBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (lpFired) { lpFired = false; return; }
+      highlight = { row: null, col: null };
       state.cols.splice(ci, 1);
       saveState();
       render();
@@ -706,7 +740,7 @@ function render() {
     boost.className = 'boost ' + (col.boost ? boostClass(col.boost) : 'empty');
     boost.textContent = col.boost ? col.boost : '激化';
     boost.title = '激化タイプ';
-    boost.addEventListener('click', () => openPicker(ci));
+    boost.addEventListener('click', () => { if (lpFired) { lpFired = false; return; } openPicker(ci); });
     wrap.appendChild(boost);
 
     th.appendChild(wrap);
@@ -732,11 +766,16 @@ function render() {
     const tr = document.createElement('tr');
     const th = document.createElement('th');
     th.textContent = (r + 1);
+    th.dataset.row = r;
+    attachLongPress(th, () => setHighlight(r, null));
     tr.appendChild(th);
 
-    state.cols.forEach(col => {
+    state.cols.forEach((col, ci) => {
       const val = col.cells[r] || '';
       const td = document.createElement('td');
+      td.dataset.row = r;
+      td.dataset.col = ci;
+      attachLongPress(td, () => setHighlight(r, ci));
 
       if (state.inputMode === 'free') {
         td.className = 'cell free';
@@ -754,11 +793,13 @@ function render() {
         td.className = 'cell' + (val === '◯' ? ' maru' : val === '△' ? ' tri' : '');
         td.textContent = val;
         td.addEventListener('click', () => {
+          if (lpFired) { lpFired = false; return; }
           const cur = col.cells[r] || '';
           const next = SIMPLE_STATES[(SIMPLE_STATES.indexOf(cur) + 1) % SIMPLE_STATES.length];
           col.cells[r] = next;
           td.textContent = next;
           td.className = 'cell' + (next === '◯' ? ' maru' : next === '△' ? ' tri' : '');
+          applyHighlight();
           saveState();
         });
       }
@@ -801,6 +842,7 @@ function render() {
 
   tbl.appendChild(tbody);
   tbl.style.zoom = state.zoom || 1;
+  applyHighlight();
 }
 
 function addRows(n) {
@@ -980,6 +1022,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   if (confirm('すべてのデータをリセットしますか？')) {
     const mode = state.inputMode;
     const zoom = state.zoom;
+    highlight = { row: null, col: null };
     state = defaultState();
     state.inputMode = mode;
     state.zoom = zoom;
